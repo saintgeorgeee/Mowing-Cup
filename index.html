@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mowing Cup — Bracket</title>
+<style>
+  :root{
+    --bg:#0b0b0c;
+    --bg-2:#111113;
+    --card:#17171a;
+    --card-border:#2a2a2d;
+    --card-border-soft:#232326;
+    --text:#f0eee8;
+    --text-dim:#8c8a86;
+    --text-faint:#565553;
+    --gold:#cda434;
+    --gold-light:#f3dd8f;
+    --gold-dark:#8a6d1f;
+    --line:#333336;
+    --danger:#a33;
+    --radius:6px;
+    --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  body.theme-light{
+    --bg:#f7f5ef;
+    --bg-2:#ffffff;
+    --card:#ffffff;
+    --card-border:#e0dbcc;
+    --card-border-soft:#ece7d8;
+    --text:#211f1a;
+    --text-dim:#726c5e;
+    --text-faint:#a49d8c;
+    --gold:#a3781a;
+    --gold-light:#8a6414;
+    --gold-dark:#c99a2e;
+    --line:#ddd6c3;
+    --danger:#b23c3c;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%; width:100%;
+    background:var(--bg); color:var(--text);
+    font-family:var(--sans);
+    overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #app{position:fixed; inset:0; display:flex; flex-direction:column;}
+
+  /* ---------- HEADER ---------- */
+  header{
+    flex:0 0 auto;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px;
+    background:linear-gradient(180deg, var(--bg-2), var(--bg));
+    border-bottom:1px solid var(--card-border);
+    z-index:50;
+    gap:12px; flex-wrap:wrap;
+  }
+  .brand{display:flex; align-items:baseline; gap:10px;}
+  .brand h1{
+    margin:0; font-size:20px; letter-spacing:0.14em; font-weight:800;
+    text-transform:uppercase; color:var(--text);
+  }
+  .brand h1 span{color:var(--gold);}
+  .brand .tag{
+    font-family:var(--mono); font-size:10px; letter-spacing:0.08em;
+    color:var(--text-faint); text-transform:uppercase;
+  }
+  .hdr-controls{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .mode-pill{
+    font-family:var(--mono); font-size:10px; letter-spacing:0.08em;
+    color:var(--gold); border:1px solid var(--gold-dark);
+    padding:4px 9px; border-radius:20px; text-transform:uppercase;
+    display:none;
+  }
+  body.mode-update .mode-pill.pill-update,
+  body.mode-prediction .mode-pill.pill-prediction{display:inline-block;}
+
+  button{
+    font-family:var(--sans); font-size:12.5px; font-weight:600;
+    letter-spacing:0.02em;
+    background:var(--card); color:var(--text);
+    border:1px solid var(--card-border); border-radius:var(--radius);
+    padding:8px 14px; cursor:pointer;
+    transition:border-color .15s, color .15s, background .15s;
+  }
+  button:hover{border-color:var(--gold-dark); color:var(--gold-light);}
+  button:active{transform:translateY(1px);}
+  button.primary{
+    background:var(--gold); color:#161207; border-color:var(--gold);
+  }
+  button.primary:hover{background:var(--gold-light); border-color:var(--gold-light); color:#161207;}
+  button.ghost{background:transparent;}
+  button:disabled{opacity:.35; cursor:not-allowed;}
+  button:disabled:hover{border-color:var(--card-border); color:var(--text);}
+
+  body.mode-base .only-update, body.mode-base .only-prediction, body.mode-base .only-editable{display:none !important;}
+  body.mode-update .only-base, body.mode-update .only-prediction{display:none !important;}
+  body.mode-prediction .only-base, body.mode-prediction .only-update{display:none !important;}
+
+  /* ---------- VIEWPORT / PAN-ZOOM ---------- */
+  #viewport{
+    position:relative; flex:1 1 auto; overflow:hidden;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(205,164,52,0.05), transparent 40%),
+      var(--bg);
+    cursor:grab;
+  }
+  #viewport.dragging{cursor:grabbing;}
+  #canvas{
+    position:absolute; top:0; left:0;
+    transform-origin: 0 0;
+    will-change:transform;
+  }
+  #lines-svg{position:absolute; top:0; left:0; overflow:visible;}
+  .round-label{
+    position:absolute; top:-30px;
+    font-family:var(--mono); font-size:10.5px; letter-spacing:0.14em;
+    color:var(--text-faint); text-transform:uppercase; white-space:nowrap;
+  }
+
+  .match-box{
+    position:absolute; background:var(--card);
+    border:1px solid var(--card-border);
+    border-radius:var(--radius);
+    overflow:hidden;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .match-box.clickable{cursor:pointer;}
+  .match-box.selected{
+    border-color:var(--gold); box-shadow:0 0 0 1px var(--gold), 0 0 18px rgba(205,164,52,0.25);
+  }
+  .match-box.tbd{opacity:0.42;}
+  .match-id{
+    position:absolute; top:2px; right:6px;
+    font-family:var(--mono); font-size:8.5px; color:var(--text-faint); letter-spacing:0.05em;
+  }
+  .player-row{
+    display:flex; align-items:center; justify-content:space-between;
+    height:calc(50% - 0.5px);
+    padding:0 10px; gap:8px;
+  }
+  .p-name.clickable-name{cursor:pointer; padding:6px 4px; margin:-6px -4px; border-radius:4px;}
+  .p-name.clickable-name:hover{color:var(--gold-light); background:rgba(205,164,52,0.08);}
+  .row-divider{height:1px; background:var(--card-border-soft); margin:0 8px;}
+  .p-name{
+    font-size:12.5px; font-weight:600; color:var(--text);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .p-name.tbd-text{color:var(--text-faint); font-style:italic; font-weight:500;}
+  .p-name.is-winner{color:var(--gold);}
+  .p-seed{
+    font-family:var(--mono); font-size:10px; color:var(--text-dim); flex:0 0 auto;
+  }
+  .p-name.is-winner + .p-seed{color:var(--gold-dark);}
+  .rep-slot{
+    display:flex; align-items:center; justify-content:center; height:calc(50% - 0.5px);
+    font-family:var(--mono); font-size:9.5px; letter-spacing:0.06em;
+    color:var(--text-dim); text-transform:uppercase; cursor:pointer;
+    border:1px dashed transparent;
+  }
+  .rep-slot:hover{color:var(--gold-light);}
+
+  .connector-line{stroke:var(--line); stroke-width:1.5; fill:none;}
+
+  .champion-panel{
+    position:absolute; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:8px;
+    background:linear-gradient(180deg, var(--bg-2), var(--card));
+    border:1px solid var(--gold); border-radius:10px;
+    box-shadow:0 0 24px rgba(205,164,52,0.18);
+    padding:14px;
+  }
+  .champion-face{
+    border-radius:12px; border:1px solid var(--gold-dark);
+    image-rendering:pixelated;
+  }
+  .champion-name{
+    font-size:14px; font-weight:800; color:var(--gold-light);
+    text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    max-width:100%;
+  }
+  .champion-caption{
+    font-family:var(--mono); font-size:9.5px; letter-spacing:0.12em;
+    color:var(--gold); text-transform:uppercase; text-align:center; line-height:1.5;
+  }
+
+  /* ---------- POPUP ---------- */
+  .popup{
+    position:absolute; z-index:200; background:var(--bg-2);
+    border:1px solid var(--gold-dark); border-radius:var(--radius);
+    box-shadow:0 10px 30px rgba(0,0,0,0.55);
+    padding:12px;
+    font-size:12.5px;
+  }
+  .popup h3{
+    margin:0 0 8px; font-size:10px; letter-spacing:0.1em;
+    color:var(--text-faint); text-transform:uppercase; font-family:var(--mono);
+  }
+  .popup .field{margin-bottom:8px;}
+  .popup label{
+    display:block; font-family:var(--mono); font-size:9.5px;
+    color:var(--text-dim); margin-bottom:3px; text-transform:uppercase; letter-spacing:0.05em;
+  }
+  .popup input[type=text]{
+    width:100%; background:var(--card); border:1px solid var(--card-border);
+    border-radius:4px; color:var(--text); padding:6px 8px; font-family:var(--mono);
+    font-size:12px;
+  }
+  .popup input[disabled]{opacity:.6;}
+  .popup .hint{color:var(--text-faint); font-size:10.5px; margin-top:4px; line-height:1.4;}
+  .popup .rep-option{
+    display:flex; justify-content:space-between; padding:6px 8px; border-radius:4px;
+    cursor:pointer; border:1px solid transparent;
+  }
+  .popup .rep-option:hover{background:var(--card); border-color:var(--gold-dark);}
+  .popup .rep-empty{color:var(--text-faint); font-size:11px; padding:6px 2px;}
+
+  /* ---------- PASSWORD MODAL ---------- */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:300;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .modal{
+    background:var(--bg-2); border:1px solid var(--gold-dark); border-radius:8px;
+    padding:22px; width:260px; text-align:center;
+  }
+  .modal p{font-size:11px; color:var(--text-dim); margin:0 0 12px; font-family:var(--mono);}
+  .modal input{
+    width:100%; background:var(--card); border:1px solid var(--card-border); border-radius:4px;
+    color:var(--text); padding:9px; font-family:var(--mono); font-size:14px; text-align:center;
+    margin-bottom:10px; letter-spacing:0.2em;
+  }
+  .modal .modal-actions{display:flex; gap:8px;}
+  .modal .modal-actions button{flex:1;}
+  .modal .err{color:#e07070; font-size:10.5px; margin-top:8px; display:none; font-family:var(--mono);}
+
+  /* ---------- FOOTER HINT ---------- */
+  .nav-hint{
+    position:absolute; bottom:10px; left:14px; font-family:var(--mono); font-size:9.5px;
+    color:var(--text-faint); letter-spacing:0.04em; pointer-events:none; z-index:5;
+  }
+
+  @media (max-width:640px){
+    .brand h1{font-size:16px;}
+    header{padding:10px 12px;}
+    button{padding:7px 10px; font-size:11.5px;}
+  }
+</style>
+</head>
+<body class="mode-base">
+<div id="app">
+
+  <header>
+    <div class="brand">
+      <h1>MOWING <span>CUP</span></h1>
+      <span class="tag">24-player bracket</span>
+    </div>
+    <div class="hdr-controls">
+      <span class="mode-pill pill-update">UPDATE MODE</span>
+      <span class="mode-pill pill-prediction">PREDICTION MODE</span>
+
+      <button class="only-base" id="btn-predict">Make a Prediction</button>
+      <button class="only-base" id="btn-update">Update</button>
+
+      <button class="only-update ghost" id="btn-undo-update">Undo</button>
+      <button class="only-update primary" id="btn-download">Download new HTML</button>
+      <button class="only-update ghost" id="btn-exit-update">Exit</button>
+
+      <button class="only-prediction ghost" id="btn-undo-pred">Undo</button>
+      <button class="only-prediction primary" id="btn-save-pred">Save Prediction</button>
+      <button class="only-prediction ghost" id="btn-exit-pred">Exit</button>
+
+      <button class="ghost" id="btn-reset-view" title="Reset pan/zoom">Reset view</button>
+      <button class="ghost" id="btn-fullscreen" title="Toggle fullscreen">Fullscreen</button>
+      <button class="ghost" id="btn-theme" title="Toggle light/dark theme">Light mode</button>
+    </div>
+  </header>
+
+  <div id="viewport">
+    <div id="canvas">
+      <svg id="lines-svg"></svg>
+      <div id="boxes-layer"></div>
+    </div>
+    <div class="nav-hint">scroll / pinch to zoom · drag to pan</div>
+  </div>
+
+</div>
+
+<!-- embedded data: this is what makes the exported HTML self-contained -->
+<script id="tournament-data" type="application/json">
+{
+  "matches": {
+    "r24": [
+      {"id":"R24-01","player1":{"name":"aolt","seed":1},"player2":{"name":"Repechage4","seed":null},"time1":"","time2":"","winner":null},
+      {"id":"R24-02","player1":{"name":"Creeper220","seed":3},"player2":{"name":"Repechage3","seed":null},"time1":"","time2":"","winner":null},
+      {"id":"R24-03","player1":{"name":"Shuttle_man","seed":5},"player2":{"name":"Repechage2","seed":null},"time1":"","time2":"","winner":null},
+      {"id":"R24-04","player1":{"name":"BoltDaPotato","seed":8},"player2":{"name":"Repechage1","seed":null},"time1":"","time2":"","winner":null},
+      {"id":"R24-05","player1":{"name":"ZukZnilu","seed":9},"player2":{"name":"soda_cup","seed":16},"time1":"","time2":"","winner":null},
+      {"id":"R24-06","player1":{"name":"Calumba38","seed":10},"player2":{"name":"Hammerakos","seed":15},"time1":"","time2":"","winner":null},
+      {"id":"R24-07","player1":{"name":"Steel__door","seed":30},"player2":{"name":"NoahTheKitsune","seed":27},"time1":"","time2":"","winner":null},
+      {"id":"R24-08","player1":{"name":"M1l0k0","seed":12},"player2":{"name":"Redax16MC","seed":13},"time1":"","time2":"","winner":null},
+      {"id":"R24-09","player1":{"name":"LeGofinPointExe","seed":7},"player2":{"name":"Schimeltuer144","seed":21},"time1":"","time2":"","winner":null},
+      {"id":"R24-10","player1":{"name":"SaintGeorgee","seed":2},"player2":{"name":"kicia1vs","seed":19},"time1":"","time2":"","winner":null},
+      {"id":"R24-11","player1":{"name":"NewKiddo_","seed":4},"player2":{"name":"mertchen11","seed":18},"time1":"","time2":"","winner":null},
+      {"id":"R24-12","player1":{"name":"PplCalMe_Moon","seed":6},"player2":{"name":"Kinzoku_K","seed":24},"time1":"","time2":"","winner":null}
+    ],
+    "r12":[
+      {"id":"R12-01","player1":null,"player2":null,"time1":"","time2":"","winner":null},
+      {"id":"R12-02","player1":null,"player2":null,"time1":"","time2":"","winner":null},
+      {"id":"R12-03","player1":null,"player2":null,"time1":"","time2":"","winner":null},
+      {"id":"R12-04","player1":null,"player2":null,"time1":"","time2":"","winner":null},
+      {"id":"R12-05","player1":null,"player2":null,"time1":"","time2":"","winner":null},
+      {"id":"R12-06","player1":null,"player2":null,"time1":"","time2":"","winner":null}
+    ],
+    "qf":[
+      {"id":"QF-01","player1":null,"player2":null,"time1":"","time2":"","winner":null},
+      {"id":"QF-02","player1":null,"player2":null,"time1":"","time2":"","winner":null},
+      {"id":"QF-03","player1":null,"player2":null,"time1":"","time2":"","winner":null},
+      {"id":"QF-04","player1":null,"player2":null,"time1":"","time2":"","winner":null}
+    ],
+    "sf":[
+      {"id":"SF-01","player1":null,"player2":null,"time1":"","time2":"","winner":null},
+      {"id":"SF-02","player1":null,"player2":null,"time1":"","time2":"","winner":null}
+    ],
+    "final":[
+      {"id":"FINAL","player1":null,"player2":null,"time1":"","time2":"","winner":null}
+    ],
+    "third":[
+      {"id":"THIRD","player1":null,"player2":null,"time1":"","time2":"","winner":null}
+    ]
+  },
+  "repechage":[null,null]
+}
+</script>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =========================================================
+     CONSTANTS
+  ========================================================= */
+  // NOTE: this password gate is intentionally NOT real security.
+  // It's a casual client-side gate to keep curious visitors from
+  // poking at the Update panel, nothing more.
+  var ADMIN_PASSWORD = "gg69";
+
+  var ROUNDS = [
+    {key:"r24",   label:"ROUND OF 24",     count:12},
+    {key:"r12",   label:"ROUND OF 12",     count:6},
+    {key:"qf",    label:"QUARTERFINALS",   count:4},
+    {key:"sf",    label:"SEMIFINALS",      count:2},
+    {key:"final", label:"FINAL",           count:1}
+  ];
+  var BOX_W = 226, BOX_H = 62, COL_GAP = 140, PAD = 60, TOTAL_H = 12 * 96;
+
+  // R12 boxes are laid out in this top-to-bottom visual order (not their
+  // R12-0N numbering) so that each pair feeding the same quarterfinal sits
+  // physically next to each other -- this is what keeps the R12->QF lines
+  // clean instead of criss-crossing all over the column.
+  var R12_VISUAL_ORDER = [0,5,1,4,2,3];
+
+  // Precomputes y-centers (in "world" units, no PAD) for every round beyond
+  // Round of 24. Each round's box sits at the midpoint of the two slots
+  // that feed it, like a real bracket tree -- except QF-02 (repechage),
+  // which has no fixed source pair, so it's placed between QF-01 and QF-03.
+  function computeYPositions(){
+    var spacing = TOTAL_H / 6;
+    var r12Y = {};
+    R12_VISUAL_ORDER.forEach(function(slotIdx, rank){
+      r12Y[slotIdx] = spacing * (rank + 0.5);
+    });
+    var qfY = {};
+    var qf0 = (r12Y[0] + r12Y[5]) / 2; // QF-01 anchor (top pair midpoint)
+    var qf3 = (r12Y[2] + r12Y[3]) / 2; // QF-04 anchor (bottom pair midpoint)
+    // QF-02 (repechage) and QF-03 have no single natural source pair to
+    // anchor to, so all four quarterfinal boxes are spread evenly between
+    // the two anchors instead of clustering unevenly.
+    var qfStep = (qf3 - qf0) / 3;
+    qfY[0] = qf0;
+    qfY[1] = qf0 + qfStep;
+    qfY[2] = qf0 + qfStep*2;
+    qfY[3] = qf3;
+    var sfY = {
+      0: (qfY[0] + qfY[1]) / 2,
+      1: (qfY[2] + qfY[3]) / 2
+    };
+    var finalY = { 0: (sfY[0] + sfY[1]) / 2 };
+    return {r12:r12Y, qf:qfY, sf:sfY, final:finalY};
+  }
+
+  /* =========================================================
+     STATE
+  ========================================================= */
+  var officialState = null;      // persisted / exportable state (base + update mode)
+  var predictionState = null;    // local-only, throwaway
+  var mode = "base";             // 'base' | 'update' | 'prediction'
+  var undoSnapshotUpdate = null;
+  var undoSnapshotPred = null;
+
+  var selectedBoxKey = null;     // "roundKey:slotIndex"
+  var pan = {x:80, y:60}, scale = 1;
+  var isDragging = false, dragStart = null, panStart = null;
+  var pinchStartDist = null, pinchStartScale = null, pinchWorld = null;
+
+  /* =========================================================
+     DATA HELPERS
+  ========================================================= */
+  function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+
+  function sameP(a,b){
+    if(!a && !b) return true;
+    if(!a || !b) return false;
+    return a.name === b.name;
+  }
+
+  function makeSlotPreserving(old, id, p1, p2){
+    if(old && sameP(old.player1,p1) && sameP(old.player2,p2)){
+      var clone = deepClone(old);
+      clone.id = id; clone.player1 = p1; clone.player2 = p2;
+      return clone;
+    }
+    return {id:id, player1:p1, player2:p2, time1:"", time2:"", winner:null};
+  }
+
+  function winnerOf(m){
+    if(!m || !m.winner) return null;
+    return m[m.winner];
+  }
+  function loserOf(m){
+    if(!m || !m.winner || !m.player1 || !m.player2) return null;
+    return m.winner === "player1" ? m.player2 : m.player1;
+  }
+
+  // Recomputes every derived round (r12 -> qf -> sf -> final) from
+  // r24 results + manual repechage picks. Cascades resets automatically:
+  // if a slot's actual players change, its winner/time are cleared,
+  // which then naturally clears anything built on top of it.
+  function recompute(state){
+    var winners = [];
+    state.matches.r24.forEach(function(m){
+      var w = winnerOf(m);
+      if(w) winners.push(w);
+    });
+    // unknown seeds (repechage placeholders) sort last, not as seed 0
+    winners.sort(function(a,b){
+      var sa = (a.seed==null) ? 999 : a.seed;
+      var sb = (b.seed==null) ? 999 : b.seed;
+      return sa - sb;
+    });
+    var n = winners.length;
+
+    var newR12 = [];
+    for(var i=0;i<6;i++){
+      var id = "R12-0"+(i+1);
+      var p1=null, p2=null;
+      if(i < Math.floor(n/2)){
+        p1 = winners[i];
+        p2 = winners[n-1-i];
+      } else if(n % 2 === 1 && i === Math.floor(n/2)){
+        p1 = winners[i];
+        p2 = null;
+      }
+      newR12.push(makeSlotPreserving(state.matches.r12[i], id, p1, p2));
+    }
+    state.matches.r12 = newR12;
+
+    // QF-01 = R12-01 vs R12-06, QF-02 = repechage (manual), QF-03 = R12-02
+    // vs R12-05, QF-04 = R12-03 vs R12-04. QF-02 sits between QF-01 and
+    // QF-03 on purpose: it keeps the two top seeds (which land in R12-01
+    // and R12-02) on separate semifinal paths instead of colliding early.
+    var newQF = [null,null,null,null];
+    var qfR12Pairs = [
+      {slot:0, r12:[0,5]},
+      {slot:2, r12:[1,4]},
+      {slot:3, r12:[2,3]}
+    ];
+    qfR12Pairs.forEach(function(cfg){
+      var p1 = winnerOf(state.matches.r12[cfg.r12[0]]);
+      var p2 = winnerOf(state.matches.r12[cfg.r12[1]]);
+      newQF[cfg.slot] = makeSlotPreserving(state.matches.qf[cfg.slot], "QF-0"+(cfg.slot+1), p1, p2);
+    });
+    // QF-02: manual repechage picks
+    var rep1 = state.repechage[0] || null;
+    var rep2 = state.repechage[1] || null;
+    newQF[1] = makeSlotPreserving(state.matches.qf[1], "QF-02", rep1, rep2);
+    state.matches.qf = newQF;
+
+    var sfPairs = [[0,1],[2,3]];
+    var newSF = [];
+    sfPairs.forEach(function(pair, idx){
+      var p1 = winnerOf(state.matches.qf[pair[0]]);
+      var p2 = winnerOf(state.matches.qf[pair[1]]);
+      newSF.push(makeSlotPreserving(state.matches.sf[idx], "SF-0"+(idx+1), p1, p2));
+    });
+    state.matches.sf = newSF;
+
+    var p1f = winnerOf(state.matches.sf[0]);
+    var p2f = winnerOf(state.matches.sf[1]);
+    state.matches.final = [makeSlotPreserving(state.matches.final[0], "FINAL", p1f, p2f)];
+
+    // 3rd/4th place: the two semifinal losers
+    var l1 = loserOf(state.matches.sf[0]);
+    var l2 = loserOf(state.matches.sf[1]);
+    state.matches.third = [makeSlotPreserving(state.matches.third[0], "THIRD", l1, l2)];
+
+    // repechage picks must remain valid (still an actual r12 loser); if a
+    // previously chosen repechage name is no longer a valid loser (e.g. an
+    // upstream result changed via undo), drop it so it can be re-picked.
+    var validLoserNames = {};
+    state.matches.r12.forEach(function(m){
+      var l = loserOf(m);
+      if(l) validLoserNames[l.name] = true;
+    });
+    state.repechage = state.repechage.map(function(r){
+      return (r && validLoserNames[r.name]) ? r : null;
+    });
+
+    return state;
+  }
+
+  function availableRepechage(state, excludingIdx){
+    var picked = {};
+    state.repechage.forEach(function(r, i){
+      if(r && i !== excludingIdx) picked[r.name] = true;
+    });
+    var list = [];
+    state.matches.r12.forEach(function(m){
+      var l = loserOf(m);
+      if(l && !picked[l.name]) list.push(l);
+    });
+    return list;
+  }
+
+  function currentState(){
+    return mode === "prediction" ? predictionState : officialState;
+  }
+
+  /* =========================================================
+     MUTATIONS (with single-step undo)
+  ========================================================= */
+  function pushUndo(){
+    if(mode === "update"){ undoSnapshotUpdate = deepClone(officialState); }
+    else if(mode === "prediction"){ undoSnapshotPred = deepClone(predictionState); }
+    updateUndoButtons();
+  }
+
+  function doUndo(){
+    if(mode === "update" && undoSnapshotUpdate){
+      officialState = undoSnapshotUpdate;
+      undoSnapshotUpdate = null;
+    } else if(mode === "prediction" && undoSnapshotPred){
+      predictionState = undoSnapshotPred;
+      undoSnapshotPred = null;
+    }
+    closePopup();
+    updateUndoButtons();
+    render();
+  }
+
+  function updateUndoButtons(){
+    document.getElementById("btn-undo-update").disabled = !undoSnapshotUpdate;
+    document.getElementById("btn-undo-pred").disabled = !undoSnapshotPred;
+  }
+
+  function setWinner(roundKey, slotIndex, which){
+    var state = currentState();
+    var m = state.matches[roundKey][slotIndex];
+    if(!m.player1 || !m.player2) return;
+    pushUndo();
+    m.winner = which;
+    recompute(state);
+    render();
+  }
+
+  function setTime(roundKey, slotIndex, which, value){
+    var state = currentState();
+    var m = state.matches[roundKey][slotIndex];
+    m[which] = value;
+  }
+
+  function setRepechage(idx, player){
+    var state = currentState();
+    pushUndo();
+    state.repechage[idx] = player;
+    recompute(state);
+    closePopup();
+    render();
+  }
+
+  /* =========================================================
+     LAYOUT
+  ========================================================= */
+  var CHAMPION_W = 220, CHAMPION_H = 210;
+
+  function computeLayout(state){
+    var boxes = [];
+    var prevRoundIndex = null;
+    var sfRoundIndex = null;
+    var connectors = [];
+    var yPos = computeYPositions();
+
+    ROUNDS.forEach(function(r, colIdx){
+      var arr = state.matches[r.key];
+      var spacing = TOTAL_H / r.count;
+      var thisRoundIndex = {};
+
+      arr.forEach(function(m, i){
+        var x = colIdx * (BOX_W + COL_GAP) + PAD;
+        var yCenter = (r.key === "r24") ? spacing * (i + 0.5) : yPos[r.key][i];
+        var y = yCenter - BOX_H/2 + PAD;
+        var box = {
+          id:m.id, roundKey:r.key, slotIndex:i, x:x, y:y, w:BOX_W, h:BOX_H,
+          player1:m.player1, player2:m.player2, winner:m.winner,
+          time1:m.time1, time2:m.time2
+        };
+        boxes.push(box);
+        if(box.player1) thisRoundIndex[box.player1.name] = box;
+        if(box.player2) thisRoundIndex[box.player2.name] = box;
+
+        // No connector lines from Round of 24 into Round of 12: since R12
+        // is re-seeded dynamically, a literal line there wouldn't map to
+        // anything meaningful. The two columns are just spaced apart instead.
+        if(prevRoundIndex && r.key !== "r12"){
+          [box.player1, box.player2].forEach(function(p, idx){
+            if(!p) return;
+            var src = prevRoundIndex[p.name];
+            if(!src) return;
+            connectors.push({
+              x1: src.x + src.w, y1: src.y + src.h/2,
+              x2: box.x, y2: box.y + (idx===0 ? box.h*0.27 : box.h*0.73)
+            });
+          });
+        }
+      });
+      if(r.key === "sf") sfRoundIndex = thisRoundIndex;
+      prevRoundIndex = thisRoundIndex;
+    });
+
+    // 3rd/4th place match: same column as the Final, positioned well above
+    // it (clearly separated, not squeezed together). Fed by the two
+    // semifinal LOSERS (mirrors the winner-lookup connector logic above,
+    // just resolving to the other player in each SF box).
+    var finalColIdx = ROUNDS.length - 1;
+    var finalBox = boxes[boxes.length - 1];
+    var thirdX = finalColIdx * (BOX_W + COL_GAP) + PAD;
+    var thirdYCenter = yPos.final[0] - BOX_H - 240;
+    var thirdM = state.matches.third[0];
+    var thirdBox = {
+      id: thirdM.id, roundKey:"third", slotIndex:0,
+      x: thirdX, y: thirdYCenter - BOX_H/2 + PAD, w:BOX_W, h:BOX_H,
+      player1: thirdM.player1, player2: thirdM.player2, winner: thirdM.winner,
+      time1: thirdM.time1, time2: thirdM.time2
+    };
+    boxes.push(thirdBox);
+    if(sfRoundIndex){
+      var sfLosers = [loserOf(state.matches.sf[0]), loserOf(state.matches.sf[1])];
+      sfLosers.forEach(function(p, idx){
+        if(!p) return;
+        var src = sfRoundIndex[p.name];
+        if(!src) return;
+        connectors.push({
+          x1: src.x + src.w, y1: src.y + src.h/2,
+          x2: thirdBox.x, y2: thirdBox.y + (idx===0 ? thirdBox.h*0.27 : thirdBox.h*0.73)
+        });
+      });
+    }
+
+    // Champion panel: appears once the Final has a winner, centered below
+    // the Final box.
+    var championBox = null;
+    var finalWinner = winnerOf(state.matches.final[0]);
+    if(finalWinner){
+      championBox = {
+        x: finalBox.x + finalBox.w + 70,
+        y: finalBox.y + finalBox.h/2 - CHAMPION_H/2,
+        w: CHAMPION_W, h: CHAMPION_H,
+        player: finalWinner
+      };
+      connectors.push({
+        x1: finalBox.x + finalBox.w, y1: finalBox.y + finalBox.h/2,
+        x2: championBox.x, y2: championBox.y + championBox.h/2
+      });
+    }
+
+    var maxX = PAD, maxY = PAD;
+    boxes.forEach(function(b){
+      if(b.x + b.w > maxX) maxX = b.x + b.w;
+      if(b.y + b.h > maxY) maxY = b.y + b.h;
+    });
+    if(championBox){
+      if(championBox.x + championBox.w > maxX) maxX = championBox.x + championBox.w;
+      if(championBox.y + championBox.h > maxY) maxY = championBox.y + championBox.h;
+    }
+    var worldW = maxX + PAD;
+    var worldH = maxY + PAD;
+
+    return {boxes:boxes, connectors:connectors, worldW:worldW, worldH:worldH, championBox:championBox};
+  }
+
+  /* =========================================================
+     RENDER
+  ========================================================= */
+  function fmtPlayerRow(p, roundKey, slotIndex, which, winner, editable){
+    var isWinner = winner === which;
+    if(!p){
+      return '<div class="player-row"><span class="p-name tbd-text">TBD</span></div>';
+    }
+    var nameCls = "p-name" + (isWinner ? " is-winner" : "") + (editable ? " clickable-name" : "");
+    return '<div class="player-row">' +
+      '<span class="'+nameCls+'" data-which="'+which+'">'+escapeHtml(p.name)+'</span>' +
+      '<span class="p-seed">'+(p.seed!=null ? "#"+p.seed : "—")+'</span>' +
+    '</div>';
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function isRepSlot(roundKey, slotIndex){
+    return roundKey === "qf" && slotIndex === 1;
+  }
+
+  function render(){
+    var state = currentState();
+    var layout = computeLayout(state);
+    var canvas = document.getElementById("canvas");
+    var svg = document.getElementById("lines-svg");
+    var boxesLayer = document.getElementById("boxes-layer");
+
+    canvas.style.width = layout.worldW + "px";
+    canvas.style.height = layout.worldH + "px";
+    svg.setAttribute("width", layout.worldW);
+    svg.setAttribute("height", layout.worldH);
+    svg.setAttribute("viewBox", "0 0 "+layout.worldW+" "+layout.worldH);
+
+    var linesHtml = layout.connectors.map(function(c){
+      var midX = (c.x1 + c.x2)/2;
+      var d = "M "+c.x1+","+c.y1+" H "+midX+" V "+c.y2+" H "+c.x2;
+      return '<path class="connector-line" d="'+d+'"></path>';
+    }).join("");
+    // subtle separator between Round of 24 and Round of 12 (no lines there
+    // on purpose, since R12 is re-seeded rather than bracket-fixed)
+    var sepX = 1 * (BOX_W + COL_GAP) + PAD - COL_GAP/2;
+    linesHtml += '<line x1="'+sepX+'" y1="'+(PAD*0.3)+'" x2="'+sepX+'" y2="'+(layout.worldH-PAD*0.3)+'" ' +
+      'stroke="#2a2a2d" stroke-width="1" stroke-dasharray="2,6"></line>';
+    svg.innerHTML = linesHtml;
+
+    var editable = (mode === "update" || mode === "prediction");
+    var readOnlyView = (mode === "base");
+
+    var labelsHtml = "";
+    ROUNDS.forEach(function(r, colIdx){
+      var x = colIdx * (BOX_W + COL_GAP) + PAD;
+      labelsHtml += '<div class="round-label" style="left:'+x+'px; top:'+(PAD-30)+'px;">'+r.label+'</div>';
+    });
+
+    var boxesHtml = layout.boxes.map(function(b){
+      var key = b.roundKey+":"+b.slotIndex;
+      var isSelected = (selectedBoxKey === key);
+      var repSlot = isRepSlot(b.roundKey, b.slotIndex);
+      var tbd = (!b.player1 && !b.player2) && !(repSlot && editable);
+      var clickable = editable || readOnlyView;
+
+      var inner = "";
+      if(repSlot && editable && (!b.player1 || !b.player2)){
+        inner += b.player1
+          ? fmtPlayerRow(b.player1, b.roundKey, b.slotIndex, "player1", b.winner, false)
+          : '<div class="rep-slot" data-repidx="0">+ select repechage</div>';
+        inner += '<div class="row-divider"></div>';
+        inner += b.player2
+          ? fmtPlayerRow(b.player2, b.roundKey, b.slotIndex, "player2", b.winner, false)
+          : '<div class="rep-slot" data-repidx="1">+ select repechage</div>';
+      } else {
+        var nameEditable = editable && b.player1 && b.player2;
+        inner += fmtPlayerRow(b.player1, b.roundKey, b.slotIndex, "player1", b.winner, nameEditable);
+        inner += '<div class="row-divider"></div>';
+        inner += fmtPlayerRow(b.player2, b.roundKey, b.slotIndex, "player2", b.winner, nameEditable);
+      }
+
+      return '<div class="match-box'+(clickable?" clickable":"")+(isSelected?" selected":"")+(tbd?" tbd":"")+'" '+
+        'style="left:'+b.x+'px; top:'+b.y+'px; width:'+b.w+'px; height:'+b.h+'px;" '+
+        'data-round="'+b.roundKey+'" data-slot="'+b.slotIndex+'">' +
+        '<span class="match-id">'+b.id+'</span>' + inner +
+      '</div>';
+    }).join("");
+
+    // third-place label (not part of ROUNDS, so it needs its own tiny label)
+    var thirdBoxObj = layout.boxes[layout.boxes.length - 1];
+    var thirdLabelHtml = '<div class="round-label" style="left:'+thirdBoxObj.x+'px; top:'+(thirdBoxObj.y-30)+'px;">3RD PLACE</div>';
+
+    var championHtml = "";
+    if(layout.championBox){
+      var cb = layout.championBox;
+      var face = 'https://mc-heads.net/avatar/'+encodeURIComponent(cb.player.name)+'/120';
+      championHtml = '<div class="champion-panel" style="left:'+cb.x+'px; top:'+cb.y+'px; width:'+cb.w+'px; height:'+cb.h+'px;">' +
+        '<img class="champion-face" src="'+face+'" alt="" width="96" height="96">' +
+        '<div class="champion-name">'+escapeHtml(cb.player.name)+'</div>' +
+        '<div class="champion-caption">MOWING CUP<br>CHAMPION</div>' +
+      '</div>';
+    }
+
+    boxesLayer.innerHTML = labelsHtml + thirdLabelHtml + boxesHtml + championHtml;
+    attachBoxHandlers();
+    applyTransform();
+  }
+
+  /* =========================================================
+     BOX INTERACTION
+  ========================================================= */
+  function attachBoxHandlers(){
+    var boxes = document.querySelectorAll(".match-box");
+    boxes.forEach(function(boxEl){
+      boxEl.addEventListener("click", function(e){
+        e.stopPropagation();
+        onBoxClick(e, boxEl);
+      });
+    });
+  }
+
+  function onBoxClick(e, boxEl){
+    var roundKey = boxEl.getAttribute("data-round");
+    var slotIndex = parseInt(boxEl.getAttribute("data-slot"), 10);
+    var key = roundKey+":"+slotIndex;
+
+    // Prediction mode: no selection step at all, just click a name to
+    // pick the winner directly (repechage still needs its small chooser).
+    if(mode === "prediction"){
+      var repTargetP = e.target.closest(".rep-slot");
+      if(repTargetP && isRepSlot(roundKey, slotIndex)){
+        openRepechagePopup(roundKey, slotIndex, parseInt(repTargetP.getAttribute("data-repidx"),10));
+        return;
+      }
+      var nameTargetP = e.target.closest(".clickable-name");
+      if(nameTargetP){
+        setWinner(roundKey, slotIndex, nameTargetP.getAttribute("data-which"));
+      }
+      return;
+    }
+
+    var alreadySelected = (selectedBoxKey === key);
+
+    // STEP 1: box isn't selected yet -> this click only selects it (and
+    // opens its popup). It never sets a winner on this same click, even
+    // if the click happened to land on a player's name.
+    if(!alreadySelected){
+      selectedBoxKey = key;
+      render();
+      if(mode === "base"){
+        openPopup(roundKey, slotIndex, {readonly:true});
+      } else if(mode === "update" && !isRepSlot(roundKey, slotIndex)){
+        openPopup(roundKey, slotIndex, {readonly:false});
+      }
+      return;
+    }
+
+    // STEP 2: box already selected -> this click can act.
+    var repTarget = e.target.closest(".rep-slot");
+    if(repTarget && isRepSlot(roundKey, slotIndex)){
+      openRepechagePopup(roundKey, slotIndex, parseInt(repTarget.getAttribute("data-repidx"),10));
+      return;
+    }
+    var nameTarget = e.target.closest(".clickable-name");
+    if(nameTarget && mode === "update"){
+      setWinner(roundKey, slotIndex, nameTarget.getAttribute("data-which"));
+      return;
+    }
+    // clicked elsewhere on an already-selected box: make sure its popup
+    // is showing (harmless if it already is)
+    if(mode === "update" && !isRepSlot(roundKey, slotIndex) && !popupEl){
+      openPopup(roundKey, slotIndex, {readonly:false});
+    }
+  }
+
+  // Deselects whatever box is selected and closes any open popup. Called
+  // whenever the user clicks anywhere that isn't a match box or a popup.
+  function deselectAll(){
+    if(selectedBoxKey === null && !popupEl) return;
+    selectedBoxKey = null;
+    closePopup();
+    render();
+  }
+
+  /* =========================================================
+     POPUP (time entry / read-only view)
+     Lives inside #boxes-layer (world coordinates), so it pans/zooms
+     together with the bracket instead of staying pinned to the screen.
+  ========================================================= */
+  var popupEl = null;
+  var POPUP_GAP = 14;
+
+  function closePopup(){
+    if(popupEl){ popupEl.remove(); popupEl = null; }
+  }
+
+  function findBoxLayout(roundKey, slotIndex){
+    var layout = computeLayout(currentState());
+    for(var i=0;i<layout.boxes.length;i++){
+      var b = layout.boxes[i];
+      if(b.roundKey === roundKey && b.slotIndex === slotIndex) return b;
+    }
+    return null;
+  }
+
+  // Always opens to the left of the box, at a width relative to the box
+  // itself (not a fixed pixel size), vertically aligned with its top.
+  function positionPopupWorld(el, box){
+    el.style.width = box.w + "px";
+    el.style.left = (box.x - box.w - POPUP_GAP) + "px";
+    el.style.top = box.y + "px";
+  }
+
+  function openPopup(roundKey, slotIndex, opts){
+    closePopup();
+    var state = currentState();
+    var m = state.matches[roundKey][slotIndex];
+    if(!m.player1 || !m.player2) return; // nothing to show for TBD matches
+    var box = findBoxLayout(roundKey, slotIndex);
+    if(!box) return;
+
+    if(!opts.readonly) pushUndo();
+
+    popupEl = document.createElement("div");
+    popupEl.className = "popup";
+
+    var readonly = opts.readonly ? "disabled" : "";
+    popupEl.innerHTML =
+      '<h3>'+m.id+(opts.readonly?" · view only":" · times")+'</h3>' +
+      '<div class="field"><label>'+escapeHtml(m.player1.name)+'</label>' +
+        '<input type="text" '+readonly+' data-which="time1" value="'+escapeHtml(m.time1||"")+'"></div>' +
+      '<div class="field"><label>'+escapeHtml(m.player2.name)+'</label>' +
+        '<input type="text" '+readonly+' data-which="time2" value="'+escapeHtml(m.time2||"")+'"></div>' +
+      (opts.readonly ? '<div class="hint">Click a name on the box to view results.</div>'
+                     : '<div class="hint">Click a name on the box to mark them winner.</div>');
+
+    document.getElementById("boxes-layer").appendChild(popupEl);
+    positionPopupWorld(popupEl, box);
+
+    if(!opts.readonly){
+      popupEl.querySelectorAll("input").forEach(function(inp){
+        inp.addEventListener("input", function(){
+          setTime(roundKey, slotIndex, inp.getAttribute("data-which"), inp.value);
+        });
+      });
+    }
+    popupEl.addEventListener("click", function(e){ e.stopPropagation(); });
+  }
+
+  function openRepechagePopup(roundKey, slotIndex, repIdx){
+    closePopup();
+    var state = currentState();
+    var box = findBoxLayout(roundKey, slotIndex);
+    if(!box) return;
+    var options = availableRepechage(state, repIdx);
+
+    popupEl = document.createElement("div");
+    popupEl.className = "popup";
+    popupEl.innerHTML = '<h3>Select repechage #'+(repIdx+1)+'</h3>' +
+      (options.length
+        ? options.map(function(p){
+            return '<div class="rep-option" data-name="'+escapeHtml(p.name)+'"><span>'+escapeHtml(p.name)+'</span><span class="p-seed">#'+p.seed+'</span></div>';
+          }).join("")
+        : '<div class="rep-empty">No Round of 12 losers available yet.</div>');
+
+    document.getElementById("boxes-layer").appendChild(popupEl);
+    positionPopupWorld(popupEl, box);
+
+    popupEl.querySelectorAll(".rep-option").forEach(function(el){
+      el.addEventListener("click", function(e){
+        e.stopPropagation();
+        var name = el.getAttribute("data-name");
+        var player = options.find(function(p){ return p.name === name; });
+        setRepechage(repIdx, player);
+      });
+    });
+    popupEl.addEventListener("click", function(e){ e.stopPropagation(); });
+  }
+
+  document.addEventListener("click", function(e){
+    // any click that isn't on a match box (they stopPropagation on their
+    // own click) and isn't inside an open popup means "click elsewhere"
+    if(popupEl && popupEl.contains(e.target)) return;
+    deselectAll();
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape"){
+      deselectAll();
+      closePasswordModal();
+    }
+  });
+
+  /* =========================================================
+     MODE SWITCHING
+  ========================================================= */
+  var themeLight = false;
+
+  function applyBodyClass(){
+    document.body.className = "mode-" + mode + (themeLight ? " theme-light" : "");
+  }
+
+  function setMode(newMode){
+    mode = newMode;
+    selectedBoxKey = null;
+    closePopup();
+    applyBodyClass();
+    resetView();
+    updateUndoButtons();
+    render();
+  }
+
+  function toggleTheme(){
+    themeLight = !themeLight;
+    applyBodyClass();
+    var btn = document.getElementById("btn-theme");
+    if(btn) btn.textContent = themeLight ? "Dark mode" : "Light mode";
+    try{ localStorage.setItem("mowingCupTheme", themeLight ? "light" : "dark"); }catch(e){}
+  }
+
+  function enterUpdate(){
+    openPasswordModal();
+  }
+  function enterPrediction(){
+    predictionState = deepClone(officialState);
+    undoSnapshotPred = null;
+    setMode("prediction");
+  }
+  function exitToBase(){
+    setMode("base");
+  }
+
+  var modalEl = null;
+  function openPasswordModal(){
+    closePasswordModal();
+    modalEl = document.createElement("div");
+    modalEl.className = "modal-backdrop";
+    modalEl.innerHTML =
+      '<div class="modal">' +
+        '<p>ADMIN ACCESS</p>' +
+        '<input type="password" id="pw-input" placeholder="password" autofocus>' +
+        '<div class="err" id="pw-err">Wrong password.</div>' +
+        '<div class="modal-actions" style="margin-top:10px;">' +
+          '<button class="ghost" id="pw-cancel">Cancel</button>' +
+          '<button class="primary" id="pw-submit">Unlock</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modalEl);
+    modalEl.addEventListener("click", function(e){ if(e.target === modalEl) closePasswordModal(); });
+    document.getElementById("pw-cancel").addEventListener("click", closePasswordModal);
+    document.getElementById("pw-submit").addEventListener("click", submitPassword);
+    document.getElementById("pw-input").addEventListener("keydown", function(e){
+      if(e.key === "Enter") submitPassword();
+    });
+    document.getElementById("pw-input").focus();
+  }
+  function submitPassword(){
+    var val = document.getElementById("pw-input").value;
+    if(val === ADMIN_PASSWORD){
+      closePasswordModal();
+      undoSnapshotUpdate = null;
+      setMode("update");
+    } else {
+      document.getElementById("pw-err").style.display = "block";
+    }
+  }
+  function closePasswordModal(){
+    if(modalEl){ modalEl.remove(); modalEl = null; }
+  }
+
+  /* =========================================================
+     PAN / ZOOM
+  ========================================================= */
+  function applyTransform(){
+    document.getElementById("canvas").style.transform =
+      "translate("+pan.x+"px,"+pan.y+"px) scale("+scale+")";
+  }
+  function resetView(){
+    pan = {x:80, y:60}; scale = 1;
+    applyTransform();
+  }
+
+  var viewport = document.getElementById("viewport");
+
+  viewport.addEventListener("wheel", function(e){
+    e.preventDefault();
+    var rect = viewport.getBoundingClientRect();
+    var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    var worldX = (mx - pan.x) / scale;
+    var worldY = (my - pan.y) / scale;
+    var delta = -e.deltaY * 0.0015;
+    var newScale = Math.min(2.4, Math.max(0.25, scale * (1 + delta)));
+    pan.x = mx - worldX * newScale;
+    pan.y = my - worldY * newScale;
+    scale = newScale;
+    applyTransform();
+  }, {passive:false});
+
+  var dragMoved = false;
+
+  viewport.addEventListener("mousedown", function(e){
+    if(e.target.closest(".match-box") || e.target.closest(".popup")) return;
+    isDragging = true;
+    dragMoved = false;
+    dragStart = {x:e.clientX, y:e.clientY};
+    panStart = {x:pan.x, y:pan.y};
+    viewport.classList.add("dragging");
+  });
+  window.addEventListener("mousemove", function(e){
+    if(!isDragging) return;
+    if(Math.abs(e.clientX - dragStart.x) > 3 || Math.abs(e.clientY - dragStart.y) > 3) dragMoved = true;
+    pan.x = panStart.x + (e.clientX - dragStart.x);
+    pan.y = panStart.y + (e.clientY - dragStart.y);
+    applyTransform();
+  });
+  window.addEventListener("mouseup", function(){
+    isDragging = false;
+    viewport.classList.remove("dragging");
+  });
+  // A drag-to-pan still fires a trailing "click" on mouseup; swallow just
+  // that one so it doesn't get read as "clicked elsewhere -> deselect".
+  viewport.addEventListener("click", function(e){
+    if(dragMoved){
+      e.stopPropagation();
+      dragMoved = false;
+    }
+  }, true);
+
+  // touch: 1 finger pan, 2 finger pinch zoom (anchored at the midpoint
+  // between the two fingers, not at the canvas origin)
+  function touchDist(t0,t1){
+    var dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
+    return Math.sqrt(dx*dx+dy*dy);
+  }
+  function touchMid(t0,t1,rect){
+    return {
+      x: ((t0.clientX + t1.clientX)/2) - rect.left,
+      y: ((t0.clientY + t1.clientY)/2) - rect.top
+    };
+  }
+  viewport.addEventListener("touchstart", function(e){
+    if(e.touches.length === 1){
+      if(e.target.closest(".match-box") || e.target.closest(".popup")) return;
+      isDragging = true;
+      dragMoved = false;
+      dragStart = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+      panStart = {x:pan.x, y:pan.y};
+    } else if(e.touches.length === 2){
+      isDragging = false;
+      var rect = viewport.getBoundingClientRect();
+      pinchStartDist = touchDist(e.touches[0], e.touches[1]);
+      pinchStartScale = scale;
+      var mid = touchMid(e.touches[0], e.touches[1], rect);
+      // remember which world-space point sits under the pinch midpoint,
+      // so zooming keeps that point fixed instead of the top-left corner
+      pinchWorld = {x:(mid.x - pan.x)/scale, y:(mid.y - pan.y)/scale};
+    }
+  }, {passive:true});
+  viewport.addEventListener("touchmove", function(e){
+    if(e.touches.length === 1 && isDragging){
+      if(Math.abs(e.touches[0].clientX - dragStart.x) > 3 || Math.abs(e.touches[0].clientY - dragStart.y) > 3) dragMoved = true;
+      pan.x = panStart.x + (e.touches[0].clientX - dragStart.x);
+      pan.y = panStart.y + (e.touches[0].clientY - dragStart.y);
+      applyTransform();
+    } else if(e.touches.length === 2 && pinchStartDist){
+      var rect = viewport.getBoundingClientRect();
+      var d = touchDist(e.touches[0], e.touches[1]);
+      var newScale = Math.min(2.4, Math.max(0.25, pinchStartScale * (d/pinchStartDist)));
+      var mid = touchMid(e.touches[0], e.touches[1], rect);
+      pan.x = mid.x - pinchWorld.x * newScale;
+      pan.y = mid.y - pinchWorld.y * newScale;
+      scale = newScale;
+      applyTransform();
+    }
+  }, {passive:true});
+  viewport.addEventListener("touchend", function(e){
+    if(e.touches.length < 2){ pinchStartDist = null; pinchWorld = null; }
+    if(e.touches.length === 0) isDragging = false;
+  });
+
+  /* ---------- FULLSCREEN ---------- */
+  function toggleFullscreen(){
+    var el = document.documentElement;
+    if(!document.fullscreenElement){
+      (el.requestFullscreen || el.webkitRequestFullscreen || function(){}).call(el);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
+    }
+  }
+  document.addEventListener("fullscreenchange", function(){
+    var btn = document.getElementById("btn-fullscreen");
+    if(btn) btn.textContent = document.fullscreenElement ? "Exit Fullscreen" : "Fullscreen";
+  });
+
+  /* =========================================================
+     DOWNLOAD NEW HTML (Update mode)
+  ========================================================= */
+  function downloadHTML(){
+    document.getElementById("tournament-data").textContent = JSON.stringify(officialState);
+    var clone = document.documentElement.cloneNode(true);
+    clone.querySelectorAll(".popup, .modal-backdrop").forEach(function(el){ el.remove(); });
+    var body = clone.querySelector("body");
+    body.className = "mode-base";
+    var html = "<!DOCTYPE html>\n" + clone.outerHTML;
+    var blob = new Blob([html], {type:"text/html"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "index.html";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  /* =========================================================
+     SAVE PREDICTION (PNG export, fixed size, full bracket)
+  ========================================================= */
+  var PALETTES = {
+    dark:  { bg:"#0b0b0c", card:"#17171a", cardBorder:"#2a2a2d", text:"#f0eee8",
+              textDim:"#8c8a86", textFaint:"#565553", gold:"#cda434",
+              goldLight:"#f3dd8f", goldDark:"#8a6d1f", line:"#333336",
+              champBg:"#1c1809" },
+    light: { bg:"#f7f5ef", card:"#ffffff", cardBorder:"#e0dbcc", text:"#211f1a",
+              textDim:"#726c5e", textFaint:"#a49d8c", gold:"#a3781a",
+              goldLight:"#8a6414", goldDark:"#c99a2e", line:"#ddd6c3",
+              champBg:"#ffffff" }
+  };
+
+  function savePredictionPNG(){
+    var C = themeLight ? PALETTES.light : PALETTES.dark;
+    var layout = computeLayout(predictionState);
+    var titleH = 70;
+    var W = layout.worldW, H = layout.worldH + titleH;
+    var cvs = document.createElement("canvas");
+    cvs.width = W; cvs.height = H;
+    var ctx = cvs.getContext("2d");
+
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0,0,W,H);
+
+    ctx.fillStyle = C.text;
+    ctx.font = "bold 22px -apple-system, Helvetica, Arial, sans-serif";
+    ctx.textBaseline = "top";
+    ctx.fillText("MOWING CUP — PREDICTION", 24, 20);
+    ctx.fillStyle = C.gold;
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.fillText((new Date()).toLocaleString(), 24, 46);
+
+    ctx.save();
+    ctx.translate(0, titleH);
+
+    // round labels
+    ROUNDS.forEach(function(r, colIdx){
+      var x = colIdx * (BOX_W + COL_GAP) + PAD;
+      ctx.fillStyle = C.textDim;
+      ctx.font = "10px ui-monospace, monospace";
+      ctx.fillText(r.label, x, PAD - 26);
+    });
+
+    // connectors
+    ctx.strokeStyle = C.line;
+    ctx.lineWidth = 1.5;
+    layout.connectors.forEach(function(c){
+      var midX = (c.x1+c.x2)/2;
+      ctx.beginPath();
+      ctx.moveTo(c.x1, c.y1);
+      ctx.lineTo(midX, c.y1);
+      ctx.lineTo(midX, c.y2);
+      ctx.lineTo(c.x2, c.y2);
+      ctx.stroke();
+    });
+    // R24 / R12 separator (no connectors between them, see above)
+    var sepX = 1 * (BOX_W + COL_GAP) + PAD - COL_GAP/2;
+    ctx.save();
+    ctx.strokeStyle = C.cardBorder;
+    ctx.setLineDash([2,6]);
+    ctx.beginPath();
+    ctx.moveTo(sepX, PAD*0.3);
+    ctx.lineTo(sepX, layout.worldH - PAD*0.3);
+    ctx.stroke();
+    ctx.restore();
+
+    // boxes
+    layout.boxes.forEach(function(b){
+      ctx.fillStyle = C.card;
+      ctx.strokeStyle = C.cardBorder;
+      ctx.lineWidth = 1;
+      roundRect(ctx, b.x, b.y, b.w, b.h, 6);
+      ctx.fill(); ctx.stroke();
+
+      ctx.fillStyle = C.textFaint;
+      ctx.font = "8.5px ui-monospace, monospace";
+      ctx.fillText(b.id, b.x + b.w - 8 - ctx.measureText(b.id).width, b.y + 3);
+
+      drawRow(ctx, C, b, b.player1, b.winner==="player1", 0);
+      ctx.strokeStyle = C.cardBorder;
+      ctx.beginPath();
+      ctx.moveTo(b.x+8, b.y+b.h/2);
+      ctx.lineTo(b.x+b.w-8, b.y+b.h/2);
+      ctx.stroke();
+      drawRow(ctx, C, b, b.player2, b.winner==="player2", 1);
+    });
+
+    // 3rd place label
+    var thirdBoxObj = layout.boxes[layout.boxes.length - 1];
+    ctx.fillStyle = C.textDim;
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.fillText("3RD PLACE", thirdBoxObj.x, thirdBoxObj.y - 26);
+
+    // Champion panel -- text only. The live page also shows the winner's
+    // Minecraft skin face there, but that image is loaded from an external
+    // service without CORS headers we control, so drawing it into this
+    // canvas would "taint" it and make the whole PNG export fail. Safer to
+    // just skip the face here and keep the name + caption.
+    if(layout.championBox){
+      var cb = layout.championBox;
+      ctx.fillStyle = C.champBg;
+      ctx.strokeStyle = C.gold;
+      ctx.lineWidth = 1;
+      roundRect(ctx, cb.x, cb.y, cb.w, cb.h, 10);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = C.goldLight;
+      ctx.font = "bold 14px -apple-system, Helvetica, Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(cb.player.name, cb.x + cb.w/2, cb.y + cb.h/2 - 10);
+      ctx.fillStyle = C.gold;
+      ctx.font = "9.5px ui-monospace, monospace";
+      ctx.fillText("MOWING CUP", cb.x + cb.w/2, cb.y + cb.h/2 + 16);
+      ctx.fillText("CHAMPION", cb.x + cb.w/2, cb.y + cb.h/2 + 30);
+      ctx.textAlign = "left";
+    }
+
+    ctx.restore();
+
+    cvs.toBlob(function(blob){
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      var ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,"-");
+      a.download = "mowing-cup-prediction-"+ts+".png";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+  }
+
+  function drawRow(ctx, C, b, p, isWinner, rowIdx){
+    var rowY = b.y + (rowIdx===0 ? 0 : b.h/2);
+    var rowH = b.h/2;
+    var cy = rowY + rowH/2;
+    ctx.font = "600 12px -apple-system, Helvetica, Arial, sans-serif";
+    if(!p){
+      ctx.fillStyle = C.textFaint;
+      ctx.font = "italic 12px -apple-system, Helvetica, Arial, sans-serif";
+      ctx.fillText("TBD", b.x+10, cy-6);
+      return;
+    }
+    ctx.fillStyle = isWinner ? C.gold : C.text;
+    var name = p.name.length > 20 ? p.name.slice(0,19)+"…" : p.name;
+    ctx.fillText(name, b.x+10, cy-6);
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.fillStyle = isWinner ? C.goldDark : C.textDim;
+    var seedTxt = p.seed!=null ? "#"+p.seed : "—";
+    ctx.fillText(seedTxt, b.x+b.w-10-ctx.measureText(seedTxt).width, cy-5);
+  }
+
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  /* =========================================================
+     WIRE UP BUTTONS
+  ========================================================= */
+  document.getElementById("btn-predict").addEventListener("click", enterPrediction);
+  document.getElementById("btn-update").addEventListener("click", enterUpdate);
+  document.getElementById("btn-exit-update").addEventListener("click", exitToBase);
+  document.getElementById("btn-exit-pred").addEventListener("click", exitToBase);
+  document.getElementById("btn-undo-update").addEventListener("click", doUndo);
+  document.getElementById("btn-undo-pred").addEventListener("click", doUndo);
+  document.getElementById("btn-download").addEventListener("click", downloadHTML);
+  document.getElementById("btn-save-pred").addEventListener("click", savePredictionPNG);
+  document.getElementById("btn-reset-view").addEventListener("click", resetView);
+  document.getElementById("btn-fullscreen").addEventListener("click", toggleFullscreen);
+  document.getElementById("btn-theme").addEventListener("click", toggleTheme);
+
+  /* =========================================================
+     INIT
+  ========================================================= */
+  function init(){
+    var raw = document.getElementById("tournament-data").textContent;
+    var initial = JSON.parse(raw);
+    officialState = recompute(initial);
+    try{
+      if(localStorage.getItem("mowingCupTheme") === "light"){
+        themeLight = true;
+        document.getElementById("btn-theme").textContent = "Dark mode";
+      }
+    }catch(e){}
+    applyBodyClass();
+    updateUndoButtons();
+    resetView();
+    render();
+  }
+  init();
+
+})();
+</script>
+</body>
+</html>
