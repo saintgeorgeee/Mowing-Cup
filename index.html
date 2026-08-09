@@ -1064,8 +1064,20 @@
       undoSnapshotUpdate = null;
       setMode("update");
     } else {
-      document.getElementById("pw-err").style.display = "block";
+      rickroll();
     }
+  }
+  function rickroll(){
+    if(!modalEl) return;
+    // that video doesn't allow embedding on other sites (YouTube error
+    // 153), so open it in a new tab instead of trying to embed it.
+    window.open("https://youtu.be/QDia3e12czc?si=NqJwnoqqBfok-NbO", "_blank");
+    modalEl.innerHTML =
+      '<div class="modal rickroll-modal">' +
+        '<p>WRONG PASSWORD</p>' +
+        '<button class="ghost" id="pw-cancel2" style="margin-top:4px; width:100%;">Close</button>' +
+      '</div>';
+    document.getElementById("pw-cancel2").addEventListener("click", closePasswordModal);
   }
   function closePasswordModal(){
     if(modalEl){ modalEl.remove(); modalEl = null; }
